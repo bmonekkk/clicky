@@ -6,7 +6,11 @@
 import Foundation
 
 /// Claude API helper with streaming for progressive text display.
-class ClaudeAPI {
+/// Conforms to `ChatProvider` so the companion can treat it interchangeably
+/// with other backends (tokenharbor, LM Studio, ...).
+class ClaudeAPI: ChatProvider {
+    let providerDisplayName = "Anthropic Claude"
+
     private static let tlsWarmupLock = NSLock()
     private static var hasStartedTLSWarmup = false
 

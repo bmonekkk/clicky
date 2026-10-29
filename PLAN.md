@@ -277,6 +277,7 @@ plus a short README section with the exact steps.
 | 9 | Fork hosting | push to GitHub fork under `Bmoneczek` | you |
 | 10 | Local models to test | Qwen3.8-27B / Gemma4-26B / Gemma4-12B (speed+quality TBD) | you |
 | 11 | `/models` proxy | yes — panel gets a model dropdown | you |
+| 12 | Git identity | `bmonekkk <182367900+bmonekkk@users.noreply.github.com>` (never real name) | you |
 
 ---
 
@@ -289,7 +290,5 @@ plus a short README section with the exact steps.
 3. **`/models` proxy** → yes, implemented in Phase 3.
 
 ### Note on commit attribution
-The current commit's author email is `bmonek@MacBook-Pro-Bmonek.local` (a
-machine-local address), so commits will **not** link back to your GitHub profile.
-If you want green-square attribution, tell me your GitHub noreply email
-(`<id>+Bmoneczek@users.noreply.github.com`) and I'll set it for this repo.
+Commits are authored as `bmonekkk <182367900+bmonekkk@users.noreply.github.com>`
+(see Decisions log #12), so they link back to the GitHub account.

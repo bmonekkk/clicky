@@ -83,16 +83,22 @@ Worker vars: `ELEVENLABS_VOICE_ID`
 ## Build & Run
 
 ```bash
-# Open in Xcode
-open leanring-buddy.xcodeproj
+# Option A — terminal only (no Xcode GUI needed), ad-hoc signed:
+scripts/build-local.sh     # builds Clicky.app
+scripts/run-local.sh       # launches it
 
-# Select the leanring-buddy scheme, set signing team, Cmd+R to build and run
+# Option B — Xcode:
+open leanring-buddy.xcodeproj
+# Select the leanring-buddy scheme, set signing team, Cmd+R to build and run.
 
 # Known non-blocking warnings: Swift 6 concurrency warnings,
 # deprecated onChange warning in OverlayWindow.swift. Do NOT attempt to fix these.
 ```
 
-**Do NOT run `xcodebuild` from the terminal** — it invalidates TCC (Transparency, Consent, and Control) permissions and the app will need to re-request screen recording, accessibility, etc.
+`scripts/build-local.sh` sets `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`
+and overrides the project's hardcoded `DEVELOPMENT_TEAM` with ad-hoc signing, so it
+builds without an Apple Developer account. Because ad-hoc signatures change every
+build, macOS may re-request Screen Recording / Accessibility after each rebuild.
 
 ## Cloudflare Worker
 

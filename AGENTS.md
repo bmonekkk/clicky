@@ -15,8 +15,8 @@ All API keys live on a Cloudflare Worker proxy — nothing sensitive ships in th
 - **Framework**: SwiftUI (macOS native) with AppKit bridging for menu bar panel and cursor overlay
 - **Pattern**: MVVM with `@StateObject` / `@Published` state management
 - **AI Chat**: Pluggable chat/vision backend behind the `ChatProvider` protocol. Default is Claude (Sonnet 4.6, Opus 4.6 optional) via the Cloudflare Worker proxy; `OpenAICompatibleChatProvider` adds tokenharbor (cloud) and LM Studio (local LAN). SSE streaming throughout.
-- **Speech-to-Text**: AssemblyAI real-time streaming (`u3-rt-pro` model) via websocket, with OpenAI and Apple Speech as fallbacks
-- **Text-to-Speech**: ElevenLabs (`eleven_flash_v2_5` model) via Cloudflare Worker proxy
+- **Speech-to-Text**: Apple on-device Speech by default (free, offline), selected via `VoiceTranscriptionProvider = apple` in Info.plist. AssemblyAI streaming and OpenAI upload remain available as alternates.
+- **Text-to-Speech**: macOS system voice via `AVSpeechSynthesizer` (`SystemSpeechTTSClient`) — free and offline. `ElevenLabsTTSClient` is retained but currently unused.
 - **Screen Capture**: ScreenCaptureKit (macOS 14.2+), multi-monitor support
 - **Voice Input**: Push-to-talk via `AVAudioEngine` + pluggable transcription-provider layer. System-wide keyboard shortcut via listen-only CGEvent tap.
 - **Element Pointing**: Claude embeds `[POINT:x,y:label:screenN]` tags in responses. The overlay parses these, maps coordinates to the correct monitor, and animates the blue cursor along a bezier arc to the target.
@@ -53,7 +53,7 @@ Worker vars: `ELEVENLABS_VOICE_ID`
 | File | Lines | Purpose |
 |------|-------|---------|
 | `leanring_buddyApp.swift` | ~89 | Menu bar app entry point. Uses `@NSApplicationDelegateAdaptor` with `CompanionAppDelegate` which creates `MenuBarPanelManager` and starts `CompanionManager`. No main window — the app lives entirely in the status bar. |
-| `CompanionManager.swift` | ~1026 | Central state machine. Owns dictation, shortcut monitoring, screen capture, Claude API, ElevenLabs TTS, and overlay management. Tracks voice state (idle/listening/processing/responding), conversation history, model selection, and cursor visibility. Coordinates the full push-to-talk → screenshot → Claude → TTS → pointing pipeline. |
+| `CompanionManager.swift` | ~1050 | Central state machine. Owns dictation, shortcut monitoring, screen capture, the chat provider, system TTS, and overlay management. Tracks voice state (idle/listening/processing/responding), conversation history, chat configuration, and cursor visibility. Coordinates the full push-to-talk → screenshot → chat → TTS → pointing pipeline. |
 | `MenuBarPanelManager.swift` | ~243 | NSStatusItem + custom NSPanel lifecycle. Creates the menu bar icon, manages the floating companion panel (show/hide/position), installs click-outside-to-dismiss monitor. |
 | `CompanionPanelView.swift` | ~886 | SwiftUI panel content for the menu bar dropdown. Shows companion status, push-to-talk instructions, AI model settings (provider presets + base URL / model / API key), permissions UI, DM feedback button, and quit button. Dark aesthetic using `DS` design system. |
 | `OverlayWindow.swift` | ~881 | Full-screen transparent overlay hosting the blue cursor, response text, waveform, and spinner. Handles cursor animation, element pointing with bezier arcs, multi-monitor coordinate mapping, and fade-out transitions. |
@@ -71,7 +71,8 @@ Worker vars: `ELEVENLABS_VOICE_ID`
 | `OpenAICompatibleChatProvider.swift` | ~195 | OpenAI-compatible chat/vision client (tokenharbor, LM Studio, Ollama). Calls `/chat/completions` with `image_url` base64 blocks and parses `choices[].delta.content` SSE streaming. |
 | `ChatProviderConfiguration.swift` | ~112 | User-configurable backend settings (kind, base URL, model, API key) plus Anthropic / tokenharbor / LM Studio presets. Persisted to UserDefaults; edited from the panel. |
 | `OpenAIAPI.swift` | ~142 | OpenAI GPT vision API client. |
-| `ElevenLabsTTSClient.swift` | ~81 | ElevenLabs TTS client. Sends text to the Worker proxy, plays back audio via `AVAudioPlayer`. Exposes `isPlaying` for transient cursor scheduling. |
+| `ElevenLabsTTSClient.swift` | ~81 | ElevenLabs TTS client (currently unused — replaced by `SystemSpeechTTSClient`). Sends text to the Worker proxy, plays back via `AVAudioPlayer`. |
+| `SystemSpeechTTSClient.swift` | ~75 | Free offline text-to-speech via `AVSpeechSynthesizer`. Drop-in replacement for `ElevenLabsTTSClient` (`speakText` / `isPlaying` / `stopPlayback`). No key or network. |
 | `ElementLocationDetector.swift` | ~335 | Detects UI element locations in screenshots for cursor pointing. |
 | `DesignSystem.swift` | ~880 | Design system tokens — colors, corner radii, shared styles. All UI references `DS.Colors`, `DS.CornerRadius`, etc. |
 | `ClickyAnalytics.swift` | ~121 | PostHog analytics integration for usage tracking. |

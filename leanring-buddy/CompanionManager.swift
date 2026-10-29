@@ -68,17 +68,21 @@ final class CompanionManager: ObservableObject {
     // Response text is now displayed inline on the cursor overlay via
     // streamingResponseText, so no separate response overlay manager is needed.
 
-    /// Base URL for the Cloudflare Worker proxy. All API requests route
-    /// through this so keys never ship in the app binary.
-    private static let workerBaseURL = "https://your-worker-name.your-subdomain.workers.dev"
+    /// Base URL for the Cloudflare Worker proxy. The Anthropic preset routes
+    /// through this so its key never ships in the app binary. Also used as the
+    /// default base URL in Settings. Internal so the Settings panel can read it.
+    static let workerBaseURL = "https://your-worker-name.your-subdomain.workers.dev"
 
-    /// The active chat/vision backend. Phase 1 keeps Anthropic Claude as the
-    /// default. Later phases build this from user configuration (tokenharbor,
-    /// LM Studio, ...). Every backend conforms to `ChatProvider`, so this
-    /// pipeline never needs to know which one is in use.
-    private lazy var chatProvider: ChatProvider = {
-        return ClaudeAPI(proxyURL: "\(Self.workerBaseURL)/chat", model: selectedModel)
-    }()
+    /// User-configurable chat/vision backend settings. Persisted to UserDefaults
+    /// and edited from the Settings panel in the menu bar UI.
+    @Published private(set) var chatConfiguration: ChatProviderConfiguration =
+        ChatProviderConfiguration.load(defaultAnthropicBaseURL: CompanionManager.workerBaseURL)
+
+    /// The active chat/vision backend, built from `chatConfiguration`. Every
+    /// backend conforms to `ChatProvider`, so the response pipeline never needs
+    /// to know which one is in use. Rebuilt by `updateChatConfiguration`.
+    private lazy var chatProvider: ChatProvider =
+        Self.makeChatProvider(from: chatConfiguration)
 
     private lazy var elevenLabsTTSClient: ElevenLabsTTSClient = {
         return ElevenLabsTTSClient(proxyURL: "\(Self.workerBaseURL)/tts")
@@ -111,13 +115,29 @@ final class CompanionManager: ObservableObject {
     /// Used by the panel to show accurate status text ("Active" vs "Ready").
     @Published private(set) var isOverlayVisible: Bool = false
 
-    /// The Claude model used for voice responses. Persisted to UserDefaults.
-    @Published var selectedModel: String = UserDefaults.standard.string(forKey: "selectedClaudeModel") ?? "claude-sonnet-4-6"
+    /// Applies new backend settings, persists them, and rebuilds the provider
+    /// so the next conversation uses the new model immediately.
+    func updateChatConfiguration(_ configuration: ChatProviderConfiguration) {
+        chatConfiguration = configuration
+        configuration.save()
+        chatProvider = Self.makeChatProvider(from: configuration)
+        print("🔀 Chat provider: \(configuration.summary)")
+    }
 
-    func setSelectedModel(_ model: String) {
-        selectedModel = model
-        UserDefaults.standard.set(model, forKey: "selectedClaudeModel")
-        chatProvider.model = model
+    /// Builds the concrete provider for a configuration.
+    private static func makeChatProvider(from configuration: ChatProviderConfiguration) -> ChatProvider {
+        switch configuration.kind {
+        case .anthropic:
+            // The Worker holds the real Anthropic key; the app only sends the request.
+            return ClaudeAPI(proxyURL: "\(configuration.baseURL)/chat", model: configuration.model)
+        case .openAICompatible:
+            return OpenAICompatibleChatProvider(
+                baseURL: configuration.baseURL,
+                model: configuration.model,
+                apiKey: configuration.apiKey,
+                providerDisplayName: configuration.providerDisplayName
+            )
+        }
     }
 
     /// User preference for whether the Clicky cursor should be shown.

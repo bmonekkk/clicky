@@ -55,7 +55,7 @@ Worker vars: `ELEVENLABS_VOICE_ID`
 | `leanring_buddyApp.swift` | ~89 | Menu bar app entry point. Uses `@NSApplicationDelegateAdaptor` with `CompanionAppDelegate` which creates `MenuBarPanelManager` and starts `CompanionManager`. No main window — the app lives entirely in the status bar. |
 | `CompanionManager.swift` | ~1026 | Central state machine. Owns dictation, shortcut monitoring, screen capture, Claude API, ElevenLabs TTS, and overlay management. Tracks voice state (idle/listening/processing/responding), conversation history, model selection, and cursor visibility. Coordinates the full push-to-talk → screenshot → Claude → TTS → pointing pipeline. |
 | `MenuBarPanelManager.swift` | ~243 | NSStatusItem + custom NSPanel lifecycle. Creates the menu bar icon, manages the floating companion panel (show/hide/position), installs click-outside-to-dismiss monitor. |
-| `CompanionPanelView.swift` | ~761 | SwiftUI panel content for the menu bar dropdown. Shows companion status, push-to-talk instructions, model picker (Sonnet/Opus), permissions UI, DM feedback button, and quit button. Dark aesthetic using `DS` design system. |
+| `CompanionPanelView.swift` | ~886 | SwiftUI panel content for the menu bar dropdown. Shows companion status, push-to-talk instructions, AI model settings (provider presets + base URL / model / API key), permissions UI, DM feedback button, and quit button. Dark aesthetic using `DS` design system. |
 | `OverlayWindow.swift` | ~881 | Full-screen transparent overlay hosting the blue cursor, response text, waveform, and spinner. Handles cursor animation, element pointing with bezier arcs, multi-monitor coordinate mapping, and fade-out transitions. |
 | `CompanionResponseOverlay.swift` | ~217 | SwiftUI view for the response text bubble and waveform displayed next to the cursor in the overlay. |
 | `CompanionScreenCaptureUtility.swift` | ~132 | Multi-monitor screenshot capture using ScreenCaptureKit. Returns labeled image data for each connected display. |
@@ -69,6 +69,7 @@ Worker vars: `ELEVENLABS_VOICE_ID`
 | `ClaudeAPI.swift` | ~291 | Claude vision API client with streaming (SSE) and non-streaming modes. TLS warmup optimization, image MIME detection, conversation history support. Conforms to `ChatProvider`. |
 | `ChatProvider.swift` | ~62 | Shared protocol for chat/vision backends (`analyzeImageStreaming`). Lets `CompanionManager` treat Anthropic, tokenharbor, and LM Studio interchangeably. Also holds shared image MIME-type detection. |
 | `OpenAICompatibleChatProvider.swift` | ~195 | OpenAI-compatible chat/vision client (tokenharbor, LM Studio, Ollama). Calls `/chat/completions` with `image_url` base64 blocks and parses `choices[].delta.content` SSE streaming. |
+| `ChatProviderConfiguration.swift` | ~112 | User-configurable backend settings (kind, base URL, model, API key) plus Anthropic / tokenharbor / LM Studio presets. Persisted to UserDefaults; edited from the panel. |
 | `OpenAIAPI.swift` | ~142 | OpenAI GPT vision API client. |
 | `ElevenLabsTTSClient.swift` | ~81 | ElevenLabs TTS client. Sends text to the Worker proxy, plays back audio via `AVAudioPlayer`. Exposes `isPlaying` for transient cursor scheduling. |
 | `ElementLocationDetector.swift` | ~335 | Detects UI element locations in screenshots for cursor pointing. |

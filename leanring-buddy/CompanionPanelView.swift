@@ -14,6 +14,16 @@ struct CompanionPanelView: View {
     @ObservedObject var companionManager: CompanionManager
     @State private var emailInput: String = ""
 
+    // Draft values for the AI model settings. Edited locally and only applied
+    // to the companion when the user hits Save, so typing doesn't rebuild the
+    // provider (and re-run TLS warmup) on every keystroke.
+    @State private var draftProviderDisplayName: String = ""
+    @State private var draftKind: ChatProviderKind = .anthropic
+    @State private var draftBaseURL: String = ""
+    @State private var draftModel: String = ""
+    @State private var draftAPIKey: String = ""
+    @State private var selectedPreset: ChatProviderPreset?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             panelHeader
@@ -29,7 +39,7 @@ struct CompanionPanelView: View {
                 Spacer()
                     .frame(height: 12)
 
-                modelPickerRow
+                chatModelSettingsSection
                     .padding(.horizontal, 16)
             }
 
@@ -79,6 +89,11 @@ struct CompanionPanelView: View {
         }
         .frame(width: 320)
         .background(panelBackground)
+        .onAppear {
+            // Seed the editable fields from the configuration currently in use
+            // every time the panel is shown, so the UI reflects reality.
+            loadDraftFromActiveConfiguration()
+        }
     }
 
     // MARK: - Header
@@ -596,19 +611,19 @@ struct CompanionPanelView: View {
         .padding(.vertical, 4)
     }
 
-    // MARK: - Model Picker
+    // MARK: - AI Model Settings
 
-    private var modelPickerRow: some View {
-        HStack {
-            Text("Model")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(DS.Colors.textSecondary)
-
-            Spacer()
+    private var chatModelSettingsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("AI MODEL")
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundColor(DS.Colors.textTertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: 0) {
-                modelOptionButton(label: "Sonnet", modelID: "claude-sonnet-4-6")
-                modelOptionButton(label: "Opus", modelID: "claude-opus-4-6")
+                ForEach(ChatProviderPreset.allCases, id: \.self) { preset in
+                    presetButton(preset)
+                }
             }
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -618,19 +633,52 @@ struct CompanionPanelView: View {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .stroke(DS.Colors.borderSubtle, lineWidth: 0.5)
             )
+
+            labeledSettingsField(title: "Base URL", text: $draftBaseURL)
+            labeledSettingsField(title: "Model", text: $draftModel)
+
+            // Only OpenAI-compatible backends use a locally stored key; the
+            // Anthropic preset's key lives on the Worker, and LM Studio needs none.
+            if draftKind == .openAICompatible {
+                labeledSettingsField(title: "API Key", text: $draftAPIKey, isSecure: true)
+            }
+
+            Button(action: {
+                applyDraftConfiguration()
+            }) {
+                Text("Save Model Settings")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(DS.Colors.textOnAccent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 7)
+                    .background(
+                        RoundedRectangle(cornerRadius: DS.CornerRadius.medium, style: .continuous)
+                            .fill(DS.Colors.accent)
+                    )
+            }
+            .buttonStyle(.plain)
+            .pointerCursor()
+
+            Text("Active: \(companionManager.chatConfiguration.summary)")
+                .font(.system(size: 10))
+                .foregroundColor(DS.Colors.textTertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .lineLimit(1)
+                .truncationMode(.middle)
         }
         .padding(.vertical, 4)
     }
 
-    private func modelOptionButton(label: String, modelID: String) -> some View {
-        let isSelected = companionManager.selectedModel == modelID
+    private func presetButton(_ preset: ChatProviderPreset) -> some View {
+        let isSelected = selectedPreset == preset
         return Button(action: {
-            companionManager.setSelectedModel(modelID)
+            selectPreset(preset)
         }) {
-            Text(label)
+            Text(preset.displayName)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(isSelected ? DS.Colors.textPrimary : DS.Colors.textTertiary)
-                .padding(.horizontal, 10)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 6)
                 .padding(.vertical, 5)
                 .background(
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
@@ -639,6 +687,83 @@ struct CompanionPanelView: View {
         }
         .buttonStyle(.plain)
         .pointerCursor()
+    }
+
+    @ViewBuilder
+    private func labeledSettingsField(title: String, text: Binding<String>, isSecure: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(DS.Colors.textTertiary)
+
+            Group {
+                if isSecure {
+                    SecureField("", text: text)
+                } else {
+                    TextField("", text: text)
+                }
+            }
+            .textFieldStyle(.plain)
+            .font(.system(size: 12))
+            .foregroundColor(DS.Colors.textPrimary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.white.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(DS.Colors.borderSubtle, lineWidth: 0.5)
+            )
+        }
+    }
+
+    /// Fills the editable fields from the configuration currently in use.
+    private func loadDraftFromActiveConfiguration() {
+        let configuration = companionManager.chatConfiguration
+        draftProviderDisplayName = configuration.providerDisplayName
+        draftKind = configuration.kind
+        draftBaseURL = configuration.baseURL
+        draftModel = configuration.model
+        draftAPIKey = configuration.apiKey
+        selectedPreset = Self.preset(matching: configuration)
+    }
+
+    /// Selects a preset, filling the editable fields with its defaults.
+    private func selectPreset(_ preset: ChatProviderPreset) {
+        let configuration = preset.configuration(defaultAnthropicBaseURL: CompanionManager.workerBaseURL)
+        selectedPreset = preset
+        draftProviderDisplayName = configuration.providerDisplayName
+        draftKind = configuration.kind
+        draftBaseURL = configuration.baseURL
+        draftModel = configuration.model
+        // Clear the key for presets that don't use one; keep it otherwise so
+        // switching presets back and forth doesn't wipe a typed key.
+        if !preset.requiresAPIKey {
+            draftAPIKey = ""
+        }
+    }
+
+    /// Persists the edited fields as the active configuration.
+    private func applyDraftConfiguration() {
+        let configuration = ChatProviderConfiguration(
+            providerDisplayName: draftProviderDisplayName,
+            kind: draftKind,
+            baseURL: draftBaseURL.trimmingCharacters(in: .whitespacesAndNewlines),
+            model: draftModel.trimmingCharacters(in: .whitespacesAndNewlines),
+            apiKey: draftAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        companionManager.updateChatConfiguration(configuration)
+    }
+
+    /// Best-effort match of a configuration back to a preset, so the segmented
+    /// control highlights the right button when the panel opens.
+    private static func preset(matching configuration: ChatProviderConfiguration) -> ChatProviderPreset? {
+        ChatProviderPreset.allCases.first { preset in
+            preset.configuration(defaultAnthropicBaseURL: CompanionManager.workerBaseURL).providerDisplayName
+                == configuration.providerDisplayName
+        }
     }
 
     // MARK: - DM Farza Button

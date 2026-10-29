@@ -14,9 +14,9 @@ All API keys live on a Cloudflare Worker proxy — nothing sensitive ships in th
 - **App Type**: Menu bar-only (`LSUIElement=true`), no dock icon or main window
 - **Framework**: SwiftUI (macOS native) with AppKit bridging for menu bar panel and cursor overlay
 - **Pattern**: MVVM with `@StateObject` / `@Published` state management
-- **AI Chat**: Pluggable chat/vision backend behind the `ChatProvider` protocol. Default is Claude (Sonnet 4.6, Opus 4.6 optional) via the Cloudflare Worker proxy; `OpenAICompatibleChatProvider` adds tokenharbor (cloud) and LM Studio (local LAN). SSE streaming throughout.
-- **Speech-to-Text**: Apple on-device Speech by default (free, offline), selected via `VoiceTranscriptionProvider = apple` in Info.plist. AssemblyAI streaming and OpenAI upload remain available as alternates.
-- **Text-to-Speech**: macOS system voice via `AVSpeechSynthesizer` (`SystemSpeechTTSClient`) — free and offline. `ElevenLabsTTSClient` is retained but currently unused.
+- **AI Chat**: Pluggable chat/vision backend behind the `ChatProvider` protocol, configured from the panel (kind, base URL, model, API key) with Anthropic / tokenharbor / LM Studio presets. Anthropic routes through the Cloudflare Worker proxy; `OpenAICompatibleChatProvider` covers tokenharbor (cloud, via the Worker or directly) and LM Studio (local LAN, called directly). SSE streaming throughout.
+- **Speech-to-Text**: Apple on-device Speech by default (free, offline), selected via `VoiceTranscriptionProvider = apple` in Info.plist. Forced to English (`en-US`). AssemblyAI streaming and OpenAI upload remain available as alternates.
+- **Text-to-Speech**: macOS system voice via `AVSpeechSynthesizer` (`SystemSpeechTTSClient`) — free and offline, forced to an English voice. `ElevenLabsTTSClient` is retained but currently unused.
 - **Screen Capture**: ScreenCaptureKit (macOS 14.2+), multi-monitor support
 - **Voice Input**: Push-to-talk via `AVAudioEngine` + pluggable transcription-provider layer. System-wide keyboard shortcut via listen-only CGEvent tap.
 - **Element Pointing**: Claude embeds `[POINT:x,y:label:screenN]` tags in responses. The overlay parses these, maps coordinates to the correct monitor, and animates the blue cursor along a bezier arc to the target.
@@ -48,14 +48,16 @@ Worker vars: `ELEVENLABS_VOICE_ID`
 
 **Transient Cursor Mode**: When "Show Clicky" is off, pressing the hotkey fades in the cursor overlay for the duration of the interaction (recording → response → TTS → optional pointing), then fades it out automatically after 1 second of inactivity.
 
+**No Onboarding (this fork)**: The upstream first-run introduction video and email gate are removed. `CompanionManager.hasCompletedOnboarding` is hardcoded to `true`, which also stops `start()` from setting `hasShownOverlayBefore = false`, so the welcome animation and intro video never auto-play on launch. The "Watch Onboarding Again" footer link still replays them on demand.
+
 ## Key Files
 
 | File | Lines | Purpose |
 |------|-------|---------|
 | `leanring_buddyApp.swift` | ~89 | Menu bar app entry point. Uses `@NSApplicationDelegateAdaptor` with `CompanionAppDelegate` which creates `MenuBarPanelManager` and starts `CompanionManager`. No main window — the app lives entirely in the status bar. |
-| `CompanionManager.swift` | ~1050 | Central state machine. Owns dictation, shortcut monitoring, screen capture, the chat provider, system TTS, and overlay management. Tracks voice state (idle/listening/processing/responding), conversation history, chat configuration, and cursor visibility. Coordinates the full push-to-talk → screenshot → chat → TTS → pointing pipeline. |
+| `CompanionManager.swift` | ~1000 | Central state machine. Owns dictation, shortcut monitoring, screen capture, the chat provider, system TTS, and overlay management. Tracks voice state (idle/listening/processing/responding), conversation history, chat configuration, and cursor visibility. Coordinates the full push-to-talk → screenshot → chat → TTS → pointing pipeline. Onboarding is disabled in this fork (`hasCompletedOnboarding` is always true). |
 | `MenuBarPanelManager.swift` | ~243 | NSStatusItem + custom NSPanel lifecycle. Creates the menu bar icon, manages the floating companion panel (show/hide/position), installs click-outside-to-dismiss monitor. |
-| `CompanionPanelView.swift` | ~886 | SwiftUI panel content for the menu bar dropdown. Shows companion status, push-to-talk instructions, AI model settings (provider presets + base URL / model / API key), permissions UI, DM feedback button, and quit button. Dark aesthetic using `DS` design system. |
+| `CompanionPanelView.swift` | ~792 | SwiftUI panel content for the menu bar dropdown. Shows companion status, push-to-talk instructions, AI model settings (provider presets + base URL / model / API key), permissions UI, and quit button. No onboarding/email gate in this fork. Dark aesthetic using `DS` design system. |
 | `OverlayWindow.swift` | ~881 | Full-screen transparent overlay hosting the blue cursor, response text, waveform, and spinner. Handles cursor animation, element pointing with bezier arcs, multi-monitor coordinate mapping, and fade-out transitions. |
 | `CompanionResponseOverlay.swift` | ~217 | SwiftUI view for the response text bubble and waveform displayed next to the cursor in the overlay. |
 | `CompanionScreenCaptureUtility.swift` | ~132 | Multi-monitor screenshot capture using ScreenCaptureKit. Returns labeled image data for each connected display. |
@@ -69,7 +71,7 @@ Worker vars: `ELEVENLABS_VOICE_ID`
 | `ClaudeAPI.swift` | ~291 | Claude vision API client with streaming (SSE) and non-streaming modes. TLS warmup optimization, image MIME detection, conversation history support. Conforms to `ChatProvider`. |
 | `ChatProvider.swift` | ~62 | Shared protocol for chat/vision backends (`analyzeImageStreaming`). Lets `CompanionManager` treat Anthropic, tokenharbor, and LM Studio interchangeably. Also holds shared image MIME-type detection. |
 | `OpenAICompatibleChatProvider.swift` | ~195 | OpenAI-compatible chat/vision client (tokenharbor, LM Studio, Ollama). Calls `/chat/completions` with `image_url` base64 blocks and parses `choices[].delta.content` SSE streaming. |
-| `ChatProviderConfiguration.swift` | ~112 | User-configurable backend settings (kind, base URL, model, API key) plus Anthropic / tokenharbor / LM Studio presets. Persisted to UserDefaults; edited from the panel. |
+| `ChatProviderConfiguration.swift` | ~131 | User-configurable backend settings (kind, base URL, model, API key) plus Anthropic / tokenharbor / LM Studio presets. Persisted to UserDefaults; edited from the panel. Also hosts `ChatProviderAPIKeyStore`, a per-provider API key cache so switching presets doesn't lose a typed key. |
 | `OpenAIAPI.swift` | ~142 | OpenAI GPT vision API client. |
 | `ElevenLabsTTSClient.swift` | ~81 | ElevenLabs TTS client (currently unused — replaced by `SystemSpeechTTSClient`). Sends text to the Worker proxy, plays back via `AVAudioPlayer`. |
 | `SystemSpeechTTSClient.swift` | ~75 | Free offline text-to-speech via `AVSpeechSynthesizer`. Drop-in replacement for `ElevenLabsTTSClient` (`speakText` / `isPlaying` / `stopPlayback`). No key or network. |

@@ -42,9 +42,13 @@ final class AppleSpeechTranscriptionProvider: BuddyTranscriptionProvider {
     }
 
     private static func makeBestAvailableSpeechRecognizer() -> SFSpeechRecognizer? {
+        // This fork always transcribes English. Prefer en-US even when the
+        // Mac's system language is set to something else (e.g. Polish), so
+        // dictation doesn't silently use a non-English model. Fall back to the
+        // system locale only if English recognition isn't available.
         let preferredLocales = [
-            Locale.autoupdatingCurrent,
-            Locale(identifier: "en-US")
+            Locale(identifier: "en-US"),
+            Locale.autoupdatingCurrent
         ]
 
         for preferredLocale in preferredLocales {

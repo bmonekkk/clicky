@@ -34,7 +34,7 @@ final class SystemSpeechTTSClient: NSObject, AVSpeechSynthesizerDelegate {
         stopPlayback()
 
         let utterance = AVSpeechUtterance(string: trimmedText)
-        utterance.voice = AVSpeechSynthesisVoice(language: AVSpeechSynthesisVoice.currentLanguageCode())
+        utterance.voice = Self.englishVoice()
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
@@ -46,6 +46,20 @@ final class SystemSpeechTTSClient: NSObject, AVSpeechSynthesizerDelegate {
     /// Whether speech is currently playing back.
     var isPlaying: Bool {
         synthesizer.isSpeaking
+    }
+
+    /// The voice used for playback. This fork always speaks English, even when
+    /// the Mac's system language is set to something else (e.g. Polish). Picks
+    /// a US English voice by identifier, falling back to any installed English
+    /// voice, then to the system default if none is installed.
+    private static func englishVoice() -> AVSpeechSynthesisVoice? {
+        if let usEnglishVoice = AVSpeechSynthesisVoice(identifier: "com.apple.voice.compact.en-US.Samantha") {
+            return usEnglishVoice
+        }
+        if let anyEnglishVoice = AVSpeechSynthesisVoice.speechVoices().first(where: { $0.language.hasPrefix("en") }) {
+            return anyEnglishVoice
+        }
+        return AVSpeechSynthesisVoice(language: "en-US")
     }
 
     /// Stops any in-progress playback immediately.

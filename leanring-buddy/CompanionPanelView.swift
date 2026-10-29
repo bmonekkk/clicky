@@ -12,7 +12,6 @@ import SwiftUI
 
 struct CompanionPanelView: View {
     @ObservedObject var companionManager: CompanionManager
-    @State private var emailInput: String = ""
 
     // Draft values for the AI model settings. Edited locally and only applied
     // to the companion when the user hits Save, so typing doesn't rebuild the
@@ -35,7 +34,7 @@ struct CompanionPanelView: View {
                 .padding(.top, 16)
                 .padding(.horizontal, 16)
 
-            if companionManager.hasCompletedOnboarding && companionManager.allPermissionsGranted {
+            if companionManager.allPermissionsGranted {
                 Spacer()
                     .frame(height: 12)
 
@@ -51,16 +50,8 @@ struct CompanionPanelView: View {
                     .padding(.horizontal, 16)
             }
 
-            if !companionManager.hasCompletedOnboarding && companionManager.allPermissionsGranted {
-                Spacer()
-                    .frame(height: 16)
-
-                startButton
-                    .padding(.horizontal, 16)
-            }
-
             // Show Clicky toggle — hidden for now
-            // if companionManager.hasCompletedOnboarding && companionManager.allPermissionsGranted {
+            // if companionManager.allPermissionsGranted {
             //     Spacer()
             //         .frame(height: 16)
             //
@@ -68,7 +59,7 @@ struct CompanionPanelView: View {
             //         .padding(.horizontal, 16)
             // }
 
-            if companionManager.hasCompletedOnboarding && companionManager.allPermissionsGranted {
+            if companionManager.allPermissionsGranted {
                 Spacer()
                     .frame(height: 16)
 
@@ -141,117 +132,25 @@ struct CompanionPanelView: View {
 
     @ViewBuilder
     private var permissionsCopySection: some View {
-        if companionManager.hasCompletedOnboarding && companionManager.allPermissionsGranted {
+        if companionManager.allPermissionsGranted {
             Text("Hold Control+Option to talk.")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(DS.Colors.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-        } else if companionManager.allPermissionsGranted && !companionManager.hasSubmittedEmail {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Drop your email to get started.")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(DS.Colors.textSecondary)
-                Text("If I keep building this, I'll keep you in the loop.")
-                    .font(.system(size: 11))
-                    .foregroundColor(DS.Colors.textTertiary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } else if companionManager.allPermissionsGranted {
-            Text("You're all set. Hit Start to meet Clicky.")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(DS.Colors.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        } else if companionManager.hasCompletedOnboarding {
-            // Permissions were revoked after onboarding — tell user to re-grant
+        } else {
+            // Permissions are missing or were revoked — tell the user to grant
+            // all four in the list below.
             VStack(alignment: .leading, spacing: 6) {
                 Text("Permissions needed")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(DS.Colors.textSecondary)
 
-                Text("Some permissions were revoked. Grant all four below to keep using Clicky.")
+                Text("Grant all four permissions below to start using Clicky.")
                     .font(.system(size: 11))
                     .foregroundColor(DS.Colors.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Hi, I'm Farza. This is Clicky.")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(DS.Colors.textSecondary)
-
-                Text("A side project I made for fun to help me learn stuff as I use my computer.")
-                    .font(.system(size: 11))
-                    .foregroundColor(DS.Colors.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text("Nothing runs in the background. Clicky will only take a screenshot when you press the hot key. So, you can give that permission in peace. If you are still sus, eh, I can't do much there champ.")
-                    .font(.system(size: 11))
-                    .foregroundColor(Color(red: 0.9, green: 0.4, blue: 0.4))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    // MARK: - Email + Start Button
-
-    @ViewBuilder
-    private var startButton: some View {
-        if !companionManager.hasCompletedOnboarding && companionManager.allPermissionsGranted {
-            if !companionManager.hasSubmittedEmail {
-                VStack(spacing: 8) {
-                    TextField("Enter your email", text: $emailInput)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 13))
-                        .foregroundColor(DS.Colors.textPrimary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: DS.CornerRadius.medium, style: .continuous)
-                                .fill(Color.white.opacity(0.08))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.CornerRadius.medium, style: .continuous)
-                                .stroke(DS.Colors.borderSubtle, lineWidth: 0.5)
-                        )
-
-                    Button(action: {
-                        companionManager.submitEmail(emailInput)
-                    }) {
-                        Text("Submit")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(DS.Colors.textOnAccent)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .background(
-                                RoundedRectangle(cornerRadius: DS.CornerRadius.large, style: .continuous)
-                                    .fill(emailInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                          ? DS.Colors.accent.opacity(0.4)
-                                          : DS.Colors.accent)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .pointerCursor()
-                    .disabled(emailInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            } else {
-                Button(action: {
-                    companionManager.triggerOnboarding()
-                }) {
-                    Text("Start")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(DS.Colors.textOnAccent)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: DS.CornerRadius.large, style: .continuous)
-                                .fill(DS.Colors.accent)
-                        )
-                }
-                .buttonStyle(.plain)
-                .pointerCursor()
-            }
         }
     }
 
@@ -726,33 +625,42 @@ struct CompanionPanelView: View {
         draftKind = configuration.kind
         draftBaseURL = configuration.baseURL
         draftModel = configuration.model
-        draftAPIKey = configuration.apiKey
+        // Prefer the active key, but fall back to the per-provider store so a
+        // previously saved key still appears if the active one is blank.
+        let storedAPIKey = ChatProviderAPIKeyStore.apiKey(forProviderNamed: configuration.providerDisplayName)
+        draftAPIKey = configuration.apiKey.isEmpty ? storedAPIKey : configuration.apiKey
         selectedPreset = Self.preset(matching: configuration)
     }
 
     /// Selects a preset, filling the editable fields with its defaults.
     private func selectPreset(_ preset: ChatProviderPreset) {
+        // Remember any key the user typed for the provider they're leaving, so
+        // switching presets (e.g. tokenharbor → LM Studio → tokenharbor) doesn't
+        // lose it.
+        ChatProviderAPIKeyStore.setAPIKey(draftAPIKey, forProviderNamed: draftProviderDisplayName)
+
         let configuration = preset.configuration(defaultAnthropicBaseURL: CompanionManager.workerBaseURL)
         selectedPreset = preset
         draftProviderDisplayName = configuration.providerDisplayName
         draftKind = configuration.kind
         draftBaseURL = configuration.baseURL
         draftModel = configuration.model
-        // Clear the key for presets that don't use one; keep it otherwise so
-        // switching presets back and forth doesn't wipe a typed key.
-        if !preset.requiresAPIKey {
-            draftAPIKey = ""
-        }
+        // Restore the key previously saved for this provider (empty if none).
+        draftAPIKey = ChatProviderAPIKeyStore.apiKey(forProviderNamed: configuration.providerDisplayName)
     }
 
     /// Persists the edited fields as the active configuration.
     private func applyDraftConfiguration() {
+        let trimmedAPIKey = draftAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Remember the key for this provider so it survives preset switches.
+        ChatProviderAPIKeyStore.setAPIKey(trimmedAPIKey, forProviderNamed: draftProviderDisplayName)
+
         let configuration = ChatProviderConfiguration(
             providerDisplayName: draftProviderDisplayName,
             kind: draftKind,
             baseURL: draftBaseURL.trimmingCharacters(in: .whitespacesAndNewlines),
             model: draftModel.trimmingCharacters(in: .whitespacesAndNewlines),
-            apiKey: draftAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            apiKey: trimmedAPIKey
         )
         companionManager.updateChatConfiguration(configuration)
     }
@@ -821,23 +729,21 @@ struct CompanionPanelView: View {
             .buttonStyle(.plain)
             .pointerCursor()
 
-            if companionManager.hasCompletedOnboarding {
-                Spacer()
+            Spacer()
 
-                Button(action: {
-                    companionManager.replayOnboarding()
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "play.circle")
-                            .font(.system(size: 11, weight: .medium))
-                        Text("Watch Onboarding Again")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundColor(DS.Colors.textTertiary)
+            Button(action: {
+                companionManager.replayOnboarding()
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "play.circle")
+                        .font(.system(size: 11, weight: .medium))
+                    Text("Watch Onboarding Again")
+                        .font(.system(size: 12, weight: .medium))
                 }
-                .buttonStyle(.plain)
-                .pointerCursor()
+                .foregroundColor(DS.Colors.textTertiary)
             }
+            .buttonStyle(.plain)
+            .pointerCursor()
         }
     }
 
@@ -865,7 +771,7 @@ struct CompanionPanelView: View {
     }
 
     private var statusText: String {
-        if !companionManager.hasCompletedOnboarding || !companionManager.allPermissionsGranted {
+        if !companionManager.allPermissionsGranted {
             return "Setup"
         }
         if !companionManager.isOverlayVisible {

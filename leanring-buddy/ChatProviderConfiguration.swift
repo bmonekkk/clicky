@@ -32,16 +32,6 @@ enum ChatProviderPreset: String, CaseIterable {
         }
     }
 
-    /// Whether this preset expects the user to type an API key.
-    /// Anthropic's key lives on the Worker; LM Studio runs locally with no auth.
-    var requiresAPIKey: Bool {
-        switch self {
-        case .anthropic: return false
-        case .tokenHarbor: return true
-        case .lmStudio: return false
-        }
-    }
-
     /// The starting configuration for this preset.
     func configuration(defaultAnthropicBaseURL: String) -> ChatProviderConfiguration {
         switch self {
@@ -108,5 +98,34 @@ struct ChatProviderConfiguration: Codable, Equatable {
     /// Short one-line summary for the panel, e.g. "tokenharbor · deepseek-v4.1-flash:free".
     var summary: String {
         "\(providerDisplayName) · \(model)"
+    }
+}
+
+/// Remembers API keys per provider so switching presets in the panel doesn't
+/// wipe a key the user already typed. Keys are stored in UserDefaults keyed by
+/// the provider's display name (e.g. "tokenharbor"), which is why the active
+/// `ChatProviderConfiguration.apiKey` can be blank for one provider without
+/// losing the key for another.
+enum ChatProviderAPIKeyStore {
+    private static let userDefaultsKey = "chatProviderAPIKeysByProviderName"
+
+    /// The saved key for a provider, or an empty string if none was saved.
+    static func apiKey(forProviderNamed providerDisplayName: String) -> String {
+        allStoredKeys()[providerDisplayName] ?? ""
+    }
+
+    /// Saves (or clears, when empty) the key for a provider.
+    static func setAPIKey(_ apiKey: String, forProviderNamed providerDisplayName: String) {
+        var updatedKeys = allStoredKeys()
+        if apiKey.isEmpty {
+            updatedKeys.removeValue(forKey: providerDisplayName)
+        } else {
+            updatedKeys[providerDisplayName] = apiKey
+        }
+        UserDefaults.standard.set(updatedKeys, forKey: userDefaultsKey)
+    }
+
+    private static func allStoredKeys() -> [String: String] {
+        UserDefaults.standard.dictionary(forKey: userDefaultsKey) as? [String: String] ?? [:]
     }
 }

@@ -1,174 +1,140 @@
-## Get HeyClicky for Mac and Windows
+# Clicky — multi-provider fork
 
-The official app is **[HeyClicky](https://www.heyclicky.com/)**, an AI buddy for Mac and Windows, made by me and the team.
+A fork of [farzaa/clicky](https://github.com/farzaa/clicky) (MIT) that runs on
+**tokenharbor cloud models** and **LM Studio local models**, with **free,
+offline voice** and no first-run onboarding or email gate.
 
-- **Mac:** [download HeyClicky for Mac](https://www.heyclicky.com/for-mac) (macOS 14.2 or later)
-- **Windows:** [download HeyClicky for Windows](https://www.heyclicky.com/for-windows) (Windows 10 and 11)
+macOS menu-bar app (no dock icon, no main window). Press **Control + Option**,
+speak, release: Clicky transcribes you, sends the transcript plus a screenshot
+to the configured model, speaks the answer, and can fly a blue cursor to point
+at things on screen.
 
-Those are the only official downloads. Other Windows apps built from this repo are community ports, not made by us.
+## What's different in this fork
 
----
+- **Pluggable chat/vision backend** behind a `ChatProvider` protocol
+  (`Anthropic`, `tokenharbor`, `LM Studio`, or any OpenAI-compatible endpoint).
+- **Model settings are editable in the panel** — provider preset, base URL,
+  model, and API key. No recompiling to switch models.
+- **Free voice** — Apple on-device Speech for STT and macOS system TTS
+  (`AVSpeechSynthesizer`) for playback. No AssemblyAI or ElevenLabs
+  subscription required. Both are forced to **English**.
+- **No onboarding** — the intro video, welcome animation, "Start" button, and
+  email gate are removed. Grant permissions and go.
+- **Telemetry removed** — this fork does not start PostHog (upstream sent
+  transcripts and responses to the author's analytics project).
+- **No auto-updater** — the upstream Sparkle appcast is removed, so the fork
+  never replaces itself with an unrelated release.
+- **Terminal build scripts** — `scripts/build-local.sh` + `scripts/run-local.sh`
+  build and run with ad-hoc signing, no Apple Developer account or Xcode GUI.
 
-Update: April 27, 2026.
+## Requirements
 
-Hi there! I'm Farza, the guy that made Clicky.
+- macOS 14.2 or later (ScreenCaptureKit)
+- Xcode (for the build toolchain)
+- Node.js 18+ (only if you deploy the optional Cloudflare Worker)
 
-The existing codebase remains open source. Tinker with it, make it yours, start a company out of it, do whatever you want I don't mind. But, for all the new stuff I'm hacking on, gonna keep it private. To get the latest version, HeyClicky for Mac or Windows, go to [heyclicky.com](https://www.heyclicky.com/).
+## Build and run
 
-I also tweeted about this [here](https://x.com/FarzaTV/status/2043402737828962489).
-
-Go crazy with this repo!! It's an MIT license.
-
-# Hi, this is Clicky.
-It's an AI teacher that lives as a buddy next to your cursor. It can see your screen, talk to you, and even point at stuff. Kinda like having a real teacher next to you.
-
-Download HeyClicky for free for [Mac](https://www.heyclicky.com/for-mac) or [Windows](https://www.heyclicky.com/for-windows).
-
-Here's the [original tweet](https://x.com/FarzaTV/status/2041314633978659092) that kinda blew up for a demo for more context.
-
-![Clicky — an ai buddy that lives on your mac](clicky-demo.gif)
-
-This is the open-source version of Clicky for those that want to hack on it, build their own features, or just see how it works under the hood.
-
-## Get started with Claude Code
-
-The fastest way to get this running is with [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
-
-Once you get Claude running, paste this:
-
-```
-Hi Claude.
-
-Clone https://github.com/farzaa/clicky.git into my current directory.
-
-Then read the CLAUDE.md. I want to get Clicky running locally on my Mac.
-
-Help me set up everything — the Cloudflare Worker with my own API keys, the proxy URLs, and getting it building in Xcode. Walk me through it.
+```bash
+scripts/build-local.sh     # builds build/Build/Products/Debug/Clicky.app
+scripts/run-local.sh       # launches it
 ```
 
-That's it. It'll clone the repo, read the docs, and walk you through the whole setup. Once you're running you can just keep talking to it — build features, fix bugs, whatever. Go crazy.
+The app appears in the **menu bar**, not the dock. Click the icon and grant the
+four permissions it lists: **Microphone**, **Accessibility**, **Screen
+Recording**, and **Screen Content**.
 
-## Manual setup
+> Ad-hoc signing means the app's signature changes on every rebuild, so macOS
+> may ask you to re-grant Screen Recording / Accessibility after a rebuild.
+> After granting Screen Recording, quit and reopen the app.
 
-If you want to do it yourself, here's the deal.
+## Configure a model
 
-### Prerequisites
+Open the menu-bar panel → **AI MODEL**. Pick a preset, adjust the fields, and
+click **Save Model Settings**:
 
-- macOS 14.2+ (for ScreenCaptureKit)
-- Xcode 15+
-- Node.js 18+ (for the Cloudflare Worker)
-- A [Cloudflare](https://cloudflare.com) account (free tier works)
-- API keys for: [Anthropic](https://console.anthropic.com), [AssemblyAI](https://www.assemblyai.com), [ElevenLabs](https://elevenlabs.io)
+| Preset | Base URL | Notes |
+|---|---|---|
+| **tokenharbor** | `https://tokenharbor.ai/v1` | Paste your tokenharbor API key. Default model: `deepseek-v4.1-flash:free`. |
+| **LM Studio** | `http://localhost:1234/v1` | Point at `http://<LAN-IP>:1234/v1` for a model on another machine. No API key. |
+| **Anthropic** | your Worker URL | Requires the optional Worker below. The key stays on the Worker. |
 
-### 1. Set up the Cloudflare Worker
+The local model **must be vision-capable** to see screenshots. The fork was
+tested with `deepseek-v4.1-flash:free`; LM Studio trials were set up for
+`qwen3.8-27b`, `gemma4-26b`, and `gemma4-12b`.
 
-The Worker is a tiny proxy that holds your API keys. The app talks to the Worker, the Worker talks to the APIs. This way your keys never ship in the app binary.
+API keys typed into the panel are stored per provider in the app's
+`UserDefaults` (plaintext, under `~/Library/Preferences/`). See
+[Security & privacy](#security--privacy).
+
+## Optional: Cloudflare Worker gateway
+
+The Worker lets the app use cloud models without shipping the provider key in
+the app binary. It is only needed for cloud providers; LM Studio is called
+directly over the network and never touches the Worker.
 
 ```bash
 cd worker
 npm install
-```
-
-Now add your secrets. Wrangler will prompt you to paste each one:
-
-```bash
+npx wrangler secret put TOKENHARBOR_API_KEY
+# Optional, only if you still use these upstream routes:
 npx wrangler secret put ANTHROPIC_API_KEY
 npx wrangler secret put ASSEMBLYAI_API_KEY
 npx wrangler secret put ELEVENLABS_API_KEY
-npx wrangler secret put TOKENHARBOR_API_KEY
-```
-
-For the ElevenLabs voice ID, open `wrangler.toml` and set it there (it's not sensitive):
-
-```toml
-[vars]
-ELEVENLABS_VOICE_ID = "your-voice-id-here"
-```
-
-Deploy it:
-
-```bash
 npx wrangler deploy
 ```
 
-It'll give you a URL like `https://your-worker-name.your-subdomain.workers.dev`. Copy that.
+Then set the app's **Base URL** to `<your-worker-url>/v1`, choose the
+tokenharbor preset's model name, and leave the API key blank — the Worker
+injects the real key.
 
-### 2. Run the Worker locally (for development)
+Routes: `POST /v1/chat/completions`, `GET /v1/models`, `POST /chat`
+(Anthropic), `POST /tts`, `POST /transcribe-token`.
 
-If you want to test changes to the Worker without deploying:
+For local Worker development, create `worker/.dev.vars` (gitignored) with the
+secrets and run `npx wrangler dev`.
 
-```bash
-cd worker
-npx wrangler dev
-```
+## Security & privacy
 
-This starts a local server (usually `http://localhost:8787`) that behaves exactly like the deployed Worker. You'll need to create a `.dev.vars` file in the `worker/` directory with your keys:
-
-```
-ANTHROPIC_API_KEY=sk-ant-...
-ASSEMBLYAI_API_KEY=...
-ELEVENLABS_API_KEY=...
-ELEVENLABS_VOICE_ID=...
-```
-
-Then update the proxy URLs in the Swift code to point to `http://localhost:8787` instead of the deployed Worker URL while developing. Grep for `clicky-proxy` to find them all.
-
-### 3. Update the proxy URLs in the app
-
-The app has the Worker URL hardcoded in a few places. Search for `your-worker-name.your-subdomain.workers.dev` and replace it with your Worker URL:
-
-```bash
-grep -r "clicky-proxy" leanring-buddy/
-```
-
-You'll find it in:
-- `CompanionManager.swift` — Claude chat + ElevenLabs TTS
-- `AssemblyAIStreamingTranscriptionProvider.swift` — AssemblyAI token endpoint
-
-### 4. Open in Xcode and run
-
-```bash
-open leanring-buddy.xcodeproj
-```
-
-In Xcode:
-1. Select the `leanring-buddy` scheme (yes, the typo is intentional, long story)
-2. Set your signing team under Signing & Capabilities
-3. Hit **Cmd + R** to build and run
-
-The app will appear in your menu bar (not the dock). Click the icon to open the panel, grant the permissions it asks for, and you're good.
-
-### Permissions the app needs
-
-- **Microphone** — for push-to-talk voice capture
-- **Accessibility** — for the global keyboard shortcut (Control + Option)
-- **Screen Recording** — for taking screenshots when you use the hotkey
-- **Screen Content** — for ScreenCaptureKit access
-
-## Architecture
-
-If you want the full technical breakdown, read `CLAUDE.md`. But here's the short version:
-
-**Menu bar app** (no dock icon) with two `NSPanel` windows — one for the control panel dropdown, one for the full-screen transparent cursor overlay. Push-to-talk streams audio over a websocket to AssemblyAI, sends the transcript + screenshot to Claude via streaming SSE, and plays the response through ElevenLabs TTS. Claude can embed `[POINT:x,y:label:screenN]` tags in its responses to make the cursor fly to specific UI elements across multiple monitors. All three APIs are proxied through a Cloudflare Worker.
+- **No telemetry.** `ClickyAnalytics` is a no-op facade; no analytics SDK is
+  started and no transcript/response content leaves the machine.
+- **No silent auto-update.** Sparkle is not started and the upstream appcast
+  URL/key were removed.
+- **Screenshots** are captured only while the push-to-talk interaction runs
+  and are sent to the model you configured.
+- **API keys** are stored locally in `UserDefaults`, not in the repo. They are
+  not encrypted at rest; this is a deliberate trade-off for ad-hoc-signed
+  builds. Use a scoped/limited key.
+- **Worker trust model.** Anyone who knows your deployed Worker URL can send
+  requests through it and spend your credits. Keep the URL private or use a
+  scoped key. For local LM Studio, nothing leaves your network.
+- **Sandbox is disabled** (`com.apple.security.app-sandbox = false`) because
+  the app needs ScreenCaptureKit and LAN access. Review entitlements in
+  `leanring-buddy/leanring-buddy.entitlements` before distributing.
 
 ## Project structure
 
 ```
-leanring-buddy/          # Swift source (yes, the typo stays)
-  CompanionManager.swift    # Central state machine
-  CompanionPanelView.swift  # Menu bar panel UI
-  ClaudeAPI.swift           # Claude streaming client
-  ElevenLabsTTSClient.swift # Text-to-speech playback
-  OverlayWindow.swift       # Blue cursor overlay
-  AssemblyAI*.swift         # Real-time transcription
-  BuddyDictation*.swift     # Push-to-talk pipeline
-worker/                  # Cloudflare Worker proxy
-  src/index.ts              # Three routes: /chat, /tts, /transcribe-token
-CLAUDE.md                # Full architecture doc (agents read this)
+leanring-buddy/                 # Swift source (the "leanring" typo is upstream)
+  CompanionManager.swift          # Central state machine
+  CompanionPanelView.swift        # Menu-bar panel UI
+  ChatProvider.swift              # Backend protocol
+  OpenAICompatibleChatProvider.swift
+  ChatProviderConfiguration.swift # Presets + per-provider key store
+  ClaudeAPI.swift                 # Anthropic client
+  AppleSpeechTranscriptionProvider.swift
+  SystemSpeechTTSClient.swift     # Free system TTS
+  OverlayWindow.swift             # Blue cursor overlay
+  ClickyAnalytics.swift           # No-op analytics facade
+worker/                         # Optional Cloudflare Worker proxy
+scripts/build-local.sh          # Ad-hoc local build
+scripts/run-local.sh            # Launch the built app
+AGENTS.md                       # Architecture + agent instructions
 ```
 
-## Contributing
+## Upstream
 
-PRs welcome. If you're using Claude Code, it already knows the codebase — just tell it what you want to build and point it at `CLAUDE.md`.
-
-Got feedback? DM me on X [@farzatv](https://x.com/farzatv).
+This is a personal fork. The original project and official downloads are at
+[heyclicky.com](https://www.heyclicky.com/); the upstream source is
+[farzaa/clicky](https://github.com/farzaa/clicky). Licensed under MIT — see
+[LICENSE](LICENSE).

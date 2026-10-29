@@ -1,6 +1,19 @@
-# Release Scripts
+# Scripts
 
-## `release.sh` — Ship a new version of makesomething
+## `build-local.sh` + `run-local.sh` — build and run this fork
+
+```bash
+scripts/build-local.sh   # ad-hoc signed build, no Developer account needed
+scripts/run-local.sh     # launches build/Build/Products/Debug/Clicky.app
+```
+
+This is the supported path for the multi-provider fork.
+
+## `release.sh` — upstream makesomething release pipeline
+
+> Retained from upstream. It targets the official makesomething app (Developer
+> ID signing, notarization, Sparkle appcast, DMG) and is **not** used by this
+> fork. Prefer `build-local.sh` above.
 
 Automates the full release pipeline: build → sign → DMG → notarize → Sparkle appcast → GitHub Release.
 

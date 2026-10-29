@@ -1,6 +1,6 @@
 # HeyClicky Fork — Plan: Multi-Provider Models + Free Voice
 
-Status: **DRAFT — awaiting approval before implementation**
+Status: **IMPLEMENTED** (see §10 Outcome)
 Author: OpenCode agent
 Date: 2026-10-29
 Repo: forked from `https://github.com/farzaa/clicky` (MIT)
@@ -274,7 +274,7 @@ plus a short README section with the exact steps.
 | 6 | LM Studio URL | configurable (localhost **or** LAN PC) | you |
 | 7 | Signing | **ad-hoc** | you |
 | 8 | Sequence | **plan doc first** (this) | you |
-| 9 | Fork hosting | push to GitHub fork under `Bmoneczek` | you |
+| 9 | Fork hosting | push to GitHub fork under `bmonekkk` | you |
 | 10 | Local models to test | Qwen3.8-27B / Gemma4-26B / Gemma4-12B (speed+quality TBD) | you |
 | 11 | `/models` proxy | yes — panel gets a model dropdown | you |
 | 12 | Git identity | `bmonekkk <182367900+bmonekkk@users.noreply.github.com>` (never real name) | you |
@@ -283,7 +283,7 @@ plus a short README section with the exact steps.
 
 ## 9. Resolved questions
 
-1. **Fork hosting** → push to a GitHub fork under the `Bmoneczek` account.
+1. **Fork hosting** → push to a GitHub fork under the `bmonekkk` account.
 2. **LM Studio model** → will trial `qwen3.8-27b`, `gemma4-26b`, `gemma4-12b` for
    speed/quality later. **Requirement: the local model must be vision-capable.**
    The base URL and model stay fully configurable so trials are quick.
@@ -292,3 +292,31 @@ plus a short README section with the exact steps.
 ### Note on commit attribution
 Commits are authored as `bmonekkk <182367900+bmonekkk@users.noreply.github.com>`
 (see Decisions log #12), so they link back to the GitHub account.
+
+---
+
+## 10. Outcome
+
+All phases shipped on `main` (fast-forwarded from
+`feature/multi-provider-free-voice`). Deviations from the original plan:
+
+| Planned | Actually shipped |
+|---|---|
+| Hand-edit `.pbxproj` to register new files | **Not needed** — the project uses `PBXFileSystemSynchronizedRootGroup`, so new `.swift` files compile automatically. |
+| `GET /models` Worker route | Shipped as **`GET /v1/models`** alongside `POST /v1/chat/completions`. |
+| `/chat` routes by provider header | Kept the existing Anthropic `/chat`; added a separate OpenAI-compatible `/v1/chat/completions`. |
+| — (not planned) | Removed the first-run intro video, welcome animation, Start button, and email gate. |
+| — (not planned) | Forced STT and TTS to **English** (`en-US`). |
+| — (not planned) | Added a **per-provider API key cache** so switching presets doesn't wipe a key. |
+| — (not planned) | **Disabled PostHog telemetry** and removed the upstream Sparkle appcast / auto-updater wiring. |
+
+Build/run: `scripts/build-local.sh` then `scripts/run-local.sh`.
+
+Test status:
+- ✅ tokenharbor `deepseek-v4.1-flash:free` — text + vision responses work.
+- ⏳ LM Studio (`localhost` and LAN IP) — pending the user's local test.
+- ⏳ End-to-end push-to-talk + cursor pointing — pending.
+
+Known trade-offs documented in the README: API keys live in `UserDefaults`
+(plaintext, local only), sandbox is disabled for ScreenCaptureKit/LAN access,
+and a deployed Worker URL is usable by anyone who knows it.

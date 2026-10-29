@@ -25,16 +25,18 @@ All API keys live on a Cloudflare Worker proxy — nothing sensitive ships in th
 
 ### API Proxy (Cloudflare Worker)
 
-The app never calls external APIs directly. All requests go through a Cloudflare Worker (`worker/src/index.ts`) that holds the real API keys as secrets.
+The Worker (`worker/src/index.ts`) holds provider API keys as secrets so the app can reach cloud APIs without shipping them in the binary. Anthropic always routes through it; LM Studio is called directly over the LAN and never passes through the Worker. OpenAI-compatible cloud requests can go through the Worker (`<worker>/v1`) or straight to the provider when the user supplies a key in the panel.
 
 | Route | Upstream | Purpose |
 |-------|----------|---------|
-| `POST /chat` | `api.anthropic.com/v1/messages` | Claude vision + streaming chat |
-| `POST /tts` | `api.elevenlabs.io/v1/text-to-speech/{voiceId}` | ElevenLabs TTS audio |
-| `POST /transcribe-token` | `streaming.assemblyai.com/v3/token` | Fetches a short-lived (480s) AssemblyAI websocket token |
+| `POST /chat` | `api.anthropic.com/v1/messages` | Anthropic vision + streaming chat |
+| `POST /v1/chat/completions` | `<TOKENHARBOR_BASE_URL>/chat/completions` | OpenAI-compatible chat, key injected server-side |
+| `GET /v1/models` | `<TOKENHARBOR_BASE_URL>/models` | Model list |
+| `POST /tts` | `api.elevenlabs.io/v1/text-to-speech/{voiceId}` | ElevenLabs TTS (unused in this fork) |
+| `POST /transcribe-token` | `streaming.assemblyai.com/v3/token` | AssemblyAI token (alternate STT) |
 
-Worker secrets: `ANTHROPIC_API_KEY`, `ASSEMBLYAI_API_KEY`, `ELEVENLABS_API_KEY`
-Worker vars: `ELEVENLABS_VOICE_ID`
+Worker secrets: `ANTHROPIC_API_KEY`, `ASSEMBLYAI_API_KEY`, `ELEVENLABS_API_KEY`, `TOKENHARBOR_API_KEY`
+Worker vars: `ELEVENLABS_VOICE_ID`, `TOKENHARBOR_BASE_URL`
 
 ### Key Architecture Decisions
 
@@ -77,10 +79,10 @@ Worker vars: `ELEVENLABS_VOICE_ID`
 | `SystemSpeechTTSClient.swift` | ~75 | Free offline text-to-speech via `AVSpeechSynthesizer`. Drop-in replacement for `ElevenLabsTTSClient` (`speakText` / `isPlaying` / `stopPlayback`). No key or network. |
 | `ElementLocationDetector.swift` | ~335 | Detects UI element locations in screenshots for cursor pointing. |
 | `DesignSystem.swift` | ~880 | Design system tokens — colors, corner radii, shared styles. All UI references `DS.Colors`, `DS.CornerRadius`, etc. |
-| `ClickyAnalytics.swift` | ~74 | No-op analytics facade. Upstream PostHog telemetry (which included transcripts/responses) is intentionally disabled in this fork. |
+| `ClickyAnalytics.swift` | ~61 | No-op analytics facade. Upstream PostHog telemetry (which included transcripts/responses) is intentionally disabled in this fork. |
 | `WindowPositionManager.swift` | ~262 | Window placement logic, Screen Recording permission flow, and accessibility permission helpers. |
 | `AppBundleConfiguration.swift` | ~28 | Runtime configuration reader for keys stored in the app bundle Info.plist. |
-| `worker/src/index.ts` | ~142 | Cloudflare Worker proxy. Three routes: `/chat` (Claude), `/tts` (ElevenLabs), `/transcribe-token` (AssemblyAI temp token). |
+| `worker/src/index.ts` | ~224 | Cloudflare Worker proxy. Routes: `/chat` (Anthropic), `/v1/chat/completions` + `/v1/models` (OpenAI-compatible, key injected), `/tts` (ElevenLabs), `/transcribe-token` (AssemblyAI temp token). |
 
 ## Build & Run
 
@@ -112,6 +114,7 @@ npm install
 npx wrangler secret put ANTHROPIC_API_KEY
 npx wrangler secret put ASSEMBLYAI_API_KEY
 npx wrangler secret put ELEVENLABS_API_KEY
+npx wrangler secret put TOKENHARBOR_API_KEY
 
 # Deploy
 npx wrangler deploy

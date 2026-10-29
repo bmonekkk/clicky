@@ -1,12 +1,19 @@
 /**
  * Clicky Proxy Worker
  *
- * Proxies requests to Claude and ElevenLabs APIs so the app never
- * ships with raw API keys. Keys are stored as Cloudflare secrets.
+ * Proxies requests to AI/voice providers so the app never ships raw API keys.
+ * Keys are stored as Cloudflare secrets.
  *
  * Routes:
- *   POST /chat  → Anthropic Messages API (streaming)
- *   POST /tts   → ElevenLabs TTS API
+ *   POST /chat                  → Anthropic Messages API (streaming)
+ *   POST /v1/chat/completions   → OpenAI-compatible upstream (tokenharbor), key injected
+ *   GET  /v1/models             → OpenAI-compatible upstream model list
+ *   POST /tts                   → ElevenLabs TTS API
+ *   POST /transcribe-token      → AssemblyAI temporary websocket token
+ *
+ * To use cloud models without storing a key in the app, point the app's
+ * "Base URL" at "<your-worker-url>/v1" and leave the API key blank. LM Studio
+ * runs on your LAN and is called directly — it never passes through this Worker.
  */
 
 interface Env {
@@ -14,41 +21,58 @@ interface Env {
   ELEVENLABS_API_KEY: string;
   ELEVENLABS_VOICE_ID: string;
   ASSEMBLYAI_API_KEY: string;
+  TOKENHARBOR_API_KEY: string;
+  TOKENHARBOR_BASE_URL?: string;
 }
+
+const DEFAULT_TOKENHARBOR_BASE_URL = "https://tokenharbor.ai/v1";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    if (request.method !== "POST") {
-      return new Response("Method not allowed", { status: 405 });
-    }
-
     try {
-      if (url.pathname === "/chat") {
-        return await handleChat(request, env);
+      if (request.method === "POST" && url.pathname === "/chat") {
+        return await handleAnthropicChat(request, env);
       }
 
-      if (url.pathname === "/tts") {
+      if (request.method === "POST" && url.pathname === "/v1/chat/completions") {
+        return await handleOpenAICompatibleChat(request, env);
+      }
+
+      if (request.method === "GET" && url.pathname === "/v1/models") {
+        return await handleOpenAICompatibleModels(env);
+      }
+
+      if (request.method === "POST" && url.pathname === "/tts") {
         return await handleTTS(request, env);
       }
 
-      if (url.pathname === "/transcribe-token") {
+      if (request.method === "POST" && url.pathname === "/transcribe-token") {
         return await handleTranscribeToken(env);
       }
     } catch (error) {
       console.error(`[${url.pathname}] Unhandled error:`, error);
-      return new Response(
-        JSON.stringify({ error: String(error) }),
-        { status: 500, headers: { "content-type": "application/json" } }
-      );
+      return jsonError(String(error), 500);
     }
 
     return new Response("Not found", { status: 404 });
   },
 };
 
-async function handleChat(request: Request, env: Env): Promise<Response> {
+function jsonError(message: string, status: number): Response {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+/** The configured OpenAI-compatible root, with any trailing slash removed. */
+function tokenHarborBaseURL(env: Env): string {
+  return (env.TOKENHARBOR_BASE_URL || DEFAULT_TOKENHARBOR_BASE_URL).replace(/\/+$/, "");
+}
+
+async function handleAnthropicChat(request: Request, env: Env): Promise<Response> {
   const body = await request.text();
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -76,6 +100,65 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
       "content-type": response.headers.get("content-type") || "text/event-stream",
       "cache-control": "no-cache",
     },
+  });
+}
+
+/**
+ * OpenAI-compatible chat passthrough. The app's request body is forwarded
+ * verbatim, and the real provider key is injected here so it never reaches
+ * the client.
+ */
+async function handleOpenAICompatibleChat(request: Request, env: Env): Promise<Response> {
+  const body = await request.text();
+
+  const response = await fetch(`${tokenHarborBaseURL(env)}/chat/completions`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${env.TOKENHARBOR_API_KEY}`,
+      "content-type": "application/json",
+    },
+    body,
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    console.error(`[/v1/chat/completions] Upstream error ${response.status}: ${errorBody}`);
+    return new Response(errorBody, {
+      status: response.status,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  return new Response(response.body, {
+    status: response.status,
+    headers: {
+      "content-type": response.headers.get("content-type") || "text/event-stream",
+      "cache-control": "no-cache",
+    },
+  });
+}
+
+/** Returns the upstream model list so the app can offer a dropdown. */
+async function handleOpenAICompatibleModels(env: Env): Promise<Response> {
+  const response = await fetch(`${tokenHarborBaseURL(env)}/models`, {
+    method: "GET",
+    headers: {
+      authorization: `Bearer ${env.TOKENHARBOR_API_KEY}`,
+    },
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    console.error(`[/v1/models] Upstream error ${response.status}: ${errorBody}`);
+    return new Response(errorBody, {
+      status: response.status,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  return new Response(response.body, {
+    status: 200,
+    headers: { "content-type": "application/json" },
   });
 }
 

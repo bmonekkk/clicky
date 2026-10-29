@@ -75,6 +75,7 @@ Now add your secrets. Wrangler will prompt you to paste each one:
 npx wrangler secret put ANTHROPIC_API_KEY
 npx wrangler secret put ASSEMBLYAI_API_KEY
 npx wrangler secret put ELEVENLABS_API_KEY
+npx wrangler secret put TOKENHARBOR_API_KEY
 ```
 
 For the ElevenLabs voice ID, open `wrangler.toml` and set it there (it's not sensitive):

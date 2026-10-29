@@ -187,8 +187,12 @@ UUID style as existing entries, then verify the project still opens/parses
   - `anthropic` → existing `api.anthropic.com/v1/messages`
   - `openai` → `https://tokenharbor.ai/v1/chat/completions` with
     `Authorization: Bearer ${env.TOKENHARBOR_API_KEY}`
+- **New `GET /models`** route → proxies `https://tokenharbor.ai/v1/models` so the
+  Settings panel can populate a model dropdown instead of a free-text field.
 - Add secret `TOKENHARBOR_API_KEY`; keep Anthropic/TTS routes intact.
 - Document `npx wrangler secret put TOKENHARBOR_API_KEY` in README.
+
+**Confirmed:** yes to the `/models` proxy (panel gets a model dropdown).
 
 **Note:** LM Studio never hits the Worker. This keeps local inference private.
 
@@ -270,11 +274,22 @@ plus a short README section with the exact steps.
 | 6 | LM Studio URL | configurable (localhost **or** LAN PC) | you |
 | 7 | Signing | **ad-hoc** | you |
 | 8 | Sequence | **plan doc first** (this) | you |
+| 9 | Fork hosting | push to GitHub fork under `Bmoneczek` | you |
+| 10 | Local models to test | Qwen3.8-27B / Gemma4-26B / Gemma4-12B (speed+quality TBD) | you |
+| 11 | `/models` proxy | yes — panel gets a model dropdown | you |
 
 ---
 
-## 9. Open questions (non-blocking)
+## 9. Resolved questions
 
-1. Do you have your own GitHub fork to push to, or keep it local for now?
-2. For LM Studio: which vision model will you load locally? (Clicky needs a VLM.)
-3. Should I also add a `/models` proxy so the panel can list tokenharbor models in a dropdown?
+1. **Fork hosting** → push to a GitHub fork under the `Bmoneczek` account.
+2. **LM Studio model** → will trial `qwen3.8-27b`, `gemma4-26b`, `gemma4-12b` for
+   speed/quality later. **Requirement: the local model must be vision-capable.**
+   The base URL and model stay fully configurable so trials are quick.
+3. **`/models` proxy** → yes, implemented in Phase 3.
+
+### Note on commit attribution
+The current commit's author email is `bmonek@MacBook-Pro-Bmonek.local` (a
+machine-local address), so commits will **not** link back to your GitHub profile.
+If you want green-square attribution, tell me your GitHub noreply email
+(`<id>+Bmoneczek@users.noreply.github.com`) and I'll set it for this repo.
